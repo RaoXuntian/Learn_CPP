@@ -7,18 +7,40 @@ using namespace std;
 int main() {
 	int len = 10;
 	//定义二维数组，默认均为0
-	std::vector<std::vector<int> > dp(len, std::vector<int>(len));
+	std::vector<std::vector<bool> > dp(len, std::vector<bool>(len));
 	for (int i = 0; i < dp.size(); i++) {
 		for (int j = 0; j < dp[i].size(); j++)
 		{
-			cout << dp[i][j] << " ";
+			cout << boolalpha << dp[i][j] << " ";
 		}
 		cout << endl;
 	}
 	string aa = "Activate aa";
 	char a[] = "Helloworld";
+
+	//bool* b = new bool[len];
+	bool** b = new bool*[len];
+	for (int i = 0; i < len; ++i) {
+		b[i] = new bool[len]; //b[i]是指针
+	}
+	//memset(b, true, len*len);
+	for (int i = 0; i < len; ++i)
+	{
+		for (int j = 0; j < len; ++j)
+		{
+			b[i][j] = true;
+			//cout << b+i+j << " ";
+			cout << boolalpha << b[i][j] << " ";
+		}
+		cout << endl;
+	}
+
 	cout << "char a[] = " << a << ", strlen(a) = " << strlen(a) << endl;
 	cout << "string aa = " << aa << ", aa.size() = " << aa.size() << endl;
+
+	aa.push_back('@');
+	cout << "After push_back(' ') aa = " << aa << endl;
+	
 	std::vector<char> str;
 	//向str中添加元素
 	for (int i = 0; i < strlen(a); ++i)
