@@ -1,6 +1,6 @@
 #include <iostream>
 #include <cctype>
-#include "10_11_stack.cpp"
+#include "10_10_stack.h"
 
 using namespace std;
 
