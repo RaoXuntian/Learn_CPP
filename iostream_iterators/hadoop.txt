@@ -1,0 +1,927 @@
+分  数：
+
+评卷人：
+
+
+
+
+ 研究生课程论文（报告）
+
+
+
+题 目：基于Hadoop的朴素贝叶斯分类器
+
+
+学        号 		 M201977221    	
+姓        名 			饶 巡 天			
+课程指导教师 		辜 希 武			
+院（系、所） 		  计算机学院		
+
+
+
+2020年  1 月  7 日
+
+目录
+
+一、朴素贝叶斯分类器	1
+1.1 简介	1
+1.2 原理	1
+1.3 Laplace平滑	2
+1.4 使用log将乘法化为加法	3
+1.5 朴素贝叶斯的三种常见模型	3
+1.5.1 多项式模型	3
+1.5.2 伯努利模型	4
+1.5.3 高斯模型	4
+二、贝叶斯程序设计	6
+2.1 数据准备阶段	6
+2.1.1 MultiFileWordCount	6
+2.1.2 ClassWordCount	8
+2.1.3 ExistingWord	8
+2.2 分类阶段	9
+三、分类器的评估	11
+3.1 模型评估方法	11
+3.2 微平均与宏平均	11
+四、测试	13
+4.1 数据选择、训练集设置	13
+4.2 环境配置	14
+4.3 测试	14
+五、总结	16
+六、 附录	17
+
+
+
+摘要
+
+本课程设计用MapReduce算法实现贝叶斯分类器的训练过程，能对测试集文档进行分类测试。并且重写了InputFormat与RecordReader，实现了对特定目录结构的读取，设计包含三个步骤：数据准备及预处理阶段，样本分类阶段，评估阶段。最后利用测试文档的真实类别，计算分类模型的Precision，Recall和F1值。
+
+关键字：MapReduce贝叶斯 分类
+
+
+一、朴素贝叶斯分类器
+1.1 简介
+朴素贝叶斯分类器是一系列以假设特征之间强独立条件下运用贝叶斯定理为基础的简单概率分类器。
+朴素贝叶斯分类器仍然是文本分类的一种热门方法，文本分类是以词频为特征判断文件所属类别或其他（如垃圾邮件、合法性、区域分类等等）的问题。贝叶斯分类器只需花费线性时间，而不需要其他很多类型的分类器所使用的费时的迭代逼近。通过适当的预处理，它可以与这个领域更先进的方法（包括支持向量机）相竞争。
+1.2 原理
+简化流程如下：
+① 若有一个待分类项：
+
+其中，每个a为X的一个特征属性，而且特征属性之间相互独立
+② 有一个类别集合为：
+
+③ 计算	
+。
+④ 若
+
+则
+。
+要求出第四项中的后验概率，就需要分别求出在第三项中的各个条件概率，其步骤是: 
+（1） 找到一个已知分类的待分类项集合，这个集合叫做训练样本集。
+（2） 统计得到在各类别下各个特征属性的条件概率估计。即：
+
+
+……
+
+（3） 求后验概率。在朴素贝叶斯算法中，待分类项的每个特征属性都是条件独立的，由贝叶斯公式
+
+因为分母相当于在数据库中X存在的概率，所以对于任何一个待分类项来说 都是常数固定的。再求后验概率的时候只用考虑分子即可。
+因为各特征值是独立的所以有：
+
+。
+先验概率与类条件概率的具体算法与所取的模型有关，细节将在1.5节介绍。
+
+
+1.3 Laplace平滑	
+朴素贝叶斯方法有个缺点是对数据稀疏问题过于敏感。若某个单词在训练集中不存在而在某个测试文档中出现，则会出现后验概率为0的情况。
+所以在计算概率时，会对数据进行平滑，具体公式为：
+
+N是总的样本个数，k是总的类别个数，是类别为的样本个数，是平滑值。
+
+是类别为的样本个数，n是特征的维数，是类别为的样本中，第i维特征的值是的样本个数，是平滑值。
+当=1时，称作Laplace平滑，当0<<1时，称作Lidstone平滑，=0时即不做平滑。
+1.4 使用log将乘法化为加法
+文本分类过程中，涉及到多个属性的概率值相乘的情况，当足够多的小数相乘时就可能会因为数据下溢而导致结果出错。这时可以借助对数运算的性质，即，使得求积运算转化为求和运算，而log函数是单调递增函数，所以可以直接根据log运算的结果判断文档在各个类中的概率的大小而不影响最终分类结果。
+1.5 朴素贝叶斯的三种常见模型
+朴素贝叶斯有三种常见的模型：多项式模型、伯努利模型、高斯模型。文本分类一般使用多项式模型或伯努利模型，高斯模型一般应用在特征为连续的情况（如身高）。
+1.5.1 多项式模型
+该模型常用于文本分类，特征是单词，值是单词的出现次数。多项式模型的最大似然估计计算如式：
+
+其中：表示训练集中类别中词组出现的次数。表示训练集类别中的总词数。加入平滑估计的概率如式：
+
+这里是依赖于词组的参数。对所有词组*取是一种常见选择（即Laplace平滑）。得到最终的概率估计公式为：
+
+其中，表示训练样本包含多少种单词。
+同理，类的先验概率为：
+
+其中，是类c下单词总数，为整个训练样本的单词总数。
+实际应用中，多项式模型已经表明优于多重伯努利模型。所以我将多项式模型作为实现模型。
+1.5.2 伯努利模型
+与多项式模型一样，伯努利模型适用于离散特征的情况，所不同的是，多重伯努利事件空间是一种布尔独立模型的事件空间，为每一个词组建立一个二值随机变量。最简单的方式就是使用最大似然估计来估计概率，即式：
+
+其中：表示类别含有词组的样本数量。平滑之后，多重伯努利模型的平滑估计如下式所示：
+
+一种常见的参数选择方式是且，得到如下概率估计公式：
+
+同理，类的先验概率为：
+
+其中，为类下文件总数，为整个训练样本的文件总数。
+多重伯努利模型仅仅考虑词组是否出现，而没有考虑出现的多少，而词频也是一个重要分类信息，所以在文本分类中，效果不如多项式模型。
+1.5.3 高斯模型
+当特征是连续变量的时候，运用多项式模型就会导致很多（不做平滑的情况下），此时即使做平滑，所得到的条件概率也难以描述真实情况。所以处理连续的特征变量，应该采用高斯模型。
+在文本分类中，特征为离散，不应使用高斯模型。
+
+二、贝叶斯程序设计
+将程序分解为两个过程，分别为数据准备与贝叶斯分类，共四个MapReduce任务，分别为MultiFileWordCount、ClassWordCount、ExistingWord、Classify。
+表1 任务划分
+过程
+Job名
+说明
+数据准备
+（DataPrepare类）
+MultiFileWordCount
+提取文件中的类与单词，并进行词频统计
+ClassWordCount
+得到每个类的单词总数
+
+ExistingWord
+统计训练集中出现过的单词
+分类
+（Prediction类）
+Classify
+计算条件概率与先验概率，并对样本进行贝叶斯分类
+执行完数据准备过程后，<类名 单词 出现次数>、<单词 出现次数>的keyvalue结果将以Sequence文件储存在HDFS中，然后将测试集上传至HDFS执行分类过程。下面将分别对这两个过程讲解。
+2.1 数据准备阶段
+2.1.1 MultiFileWordCount
+第一个MapReduce程序的功能是对特定目录结构进行读取，然后进行类的单词统计，得到key为“类名 单词”，value为“出现次数”的数据。
+
+图1 MultiFileWordCount数据流
+首先，由于输入目录“Country”为两级目录，二级目录的文件夹名即为分类的类名，若我们需要将文件全部读入，并且得到类名信息，我们需要自定义InputFormat与RecordReader。
+
+图2 输入目录结构
+由于输入文件都为小于1MB的小文件，所以在InputFormat中设置为默认不分片，即重写isSplitable()，将返回值设为false。
+自定义的InputFormat继承自FileInputFormat，FileInputFormat中的listStatus()函数会使用默认路径过滤器过滤给定路径列表中的文件/目录，最后返回一个List<FileStatus>，这个List中的文件会被后续处理。FileInputFormat中的listStatus()函数默认只会返回当前目录下的所有文件，而无法处理子目录下的文件。所以我们在知道目录结构的情况下，将listStatus()重写，返回二级目录下的所有文件列表。
+//重写listStatus，返回所有文件列表
+    @Override
+    protected List<FileStatus> listStatus(JobContext job) throws IOException {
+        List<FileStatus> dirs = super.listStatus(job);
+        List<FileStatus> res = new ArrayList<>();
+        //返回每个子目录下的所有文本文件
+        for(FileStatus dir : dirs){
+            FileStatus[] files = dir.getPath().getFileSystem(job.getConfiguration()).listStatus(dir.getPath());
+            res.addAll(Arrays.asList(files));
+        }
+        return res;
+    }
+然后，我们需要重写RecordReader，来定义送至Map任务的KeyValue数据格式。因为在MyInputFormat中设置了默认不分片，所以RecordReader收到的InputSplit为一个完整的文件。之后，我们将Key设置为该文件的路径，Value设置为文件的内容。
+public class MyFileRecordReader extends RecordReader<Text, Text> {
+
+...
+
+    @Override
+    public boolean nextKeyValue() throws IOException{
+        if(!process){
+            FileSystem fs = fileSplit.getPath().getFileSystem(conf);
+            FSDataInputStream in = null;
+            try {
+                in = new FSDataInputStream(fs.open(fileSplit.getPath()));
+                byte[] contextByte = new byte[(int)fileSplit.getLength()];
+                IOUtils.readFully(in, contextByte, 0, contextByte.length);
+                //等同于 in.read(contextByte, 0, contextByte.length);
+                String context = new String(contextByte, "utf-8");
+                key.set(fileSplit.getPath().toString()); //将文件路径作为Key,文本内容作为value
+                value.set(context);
+            }finally {
+                IOUtils.closeStream(in);
+            }
+            process = true;
+            return true;
+        }
+        return false;
+    }
+
+...
+
+}
+Map程序得到上述格式的数据后，可以根据文件路径得到类名（父目录名）与文件名（当前目录名）。并将key设置为<类名：单词>的格式，value即设置为1。
+Reduce则直接使用自带的IntSumReducer计算总和即可。
+2.1.2 ClassWordCount
+第二个MapReduce的任务为统计每个类所包含的单词总数。得到key为“类名”，value为“单词数”的数据。
+
+图3 ClassWordCount的数据流
+输入文件为第一步所得到的key为“类名 单词”，value为“出现次数”的数据，在map过程中将key设置为类名，value不变，reduce使用IntSumReducer即可。
+2.1.3 ExistingWord
+第三个MapReduce的任务为统计训练集中出现过的单词。得到key为“单词”，此时的value无意义，设置为“1”（本来想把value设置为NullWriterable，但是会出现Shuffle阶段只排序并没有完成去重的情况）。
+
+
+图4 ExistingWord的数据流
+输入文件为第一步所得到的key为“类名 单词”，value为“出现次数”的数据，在map过程中将key设置为“单词”，value设为“1”，reduce过程key不变，Value设为固定的“1”即可。
+2.2 分类阶段
+分类过程利用数据准备过程提供的数据，在执行MapReduce之前，先进行先验概率和条件概率的初始化工作。将并将其以键值对的形式存入两个Hashtable中，用以高效查询概率。
+之后MapReduce过程则对样本进行分类，得到key为文件名，value为类名的结果。
+
+图5 Classify数据流
+在初始化过程中，依据第二个与第三个MapReduce程序的结果，先统计出训练集所包含的单词总数 与出现过的单词数，然后采用1.5.1节中所描述的多项式模型：
+
+其中，表示训练集中类别中词组出现的次数。表示训练集类别中的总词数，表示训练样本包含多少种单词。
+
+其中，是类c下单词总数，为整个训练样本的单词总数。
+分别得到key为“类名 单词”value为“条件概率”与key为“类”value为“先验概率”的数据，然后将结果保存至包装类Prediction的两个HashTable成员变量中，使得map函数能高效查询概率。
+map阶段，每个map负责一个文本样本在所有类中的概率计算。设此样本属于某个类的概率设为classProb，首先将该类的先验概率取log，作为classProb的初始值，然后对文本中所有单词在该类下的条件概率取Log，然后相加求和。得到此样本属于该类的概率，最后将key设为“文档名”，value设为“类名 概率”写入上下文。
+经过Shuffle阶段后，Reduce端收到key为“文档名”，value为“<类名1 概率>、<类名2 概率>、…<类名n 概率>”的数据。
+根据公式：
+
+Reduce端将概率最大的类设置为该样本所属的类。
+三、分类器的评估
+3.1 模型评估方法
+得到分类结果后，我们使用混淆矩阵的方式进行评测，混淆矩阵如表2所示。
+表2 混淆表
+混淆表（confusion table）
+实际的类别
+Yes
+No
+分类器预测的类别
+Yes
+true positives (tp)
+false positives (fp)
+No
+false negatives (fn)
+true negatives (tn)
+然后我们用Precision、Recall、F1来描述分类器的效果。
+P(Precision,精度): 被分类为yes的样本中有多少真实类别是yes：
+
+R(Recall,精度): 真实类别是yes的样本中有多少被分为yes：
+
+F1: P和R的调和平均：
+
+3.2 微平均与宏平均
+如果贝叶斯是对多个类进行分类，则每个都会有Precision、Recall与F1，如何将多个性能度量组合成一个量？
+微平均（Micro -Averaging）：是先对每一个类统计指标值，然后在对所有类求算术平均值。
+
+
+
+宏平均（Macro-Averaging）：是对数据集中的每一个实例不分类别进行统计建立全局混淆矩阵，然后计算相应指标。
+
+
+
+宏平均为每个类提供了相同的权重，而微平均为每个文档分类决策提供了相同的权重。
+四、测试
+4.1 数据选择、训练集设置
+数据集选取的Country文件夹，即以国家为分类目标，并且挑选了一些文档数较多的国家。测试集则以下列规则设定。
+0<文档总数<=100，测试文档数设为10
+100<文档总数<=200，测试文档数设为15
+200<文档总数<=400，测试文档数设为20
+400<文档总数，测试文档数设为30
+最后的训练集及测试集设置如表3所示。
+表3 数据集的设置
+类别
+文档总数
+训练文档数量
+测试文档数量
+ALB
+81
+71
+10
+ARG
+108
+93
+15
+AUSTR
+305
+285
+20
+BELG
+154
+139
+15
+BRAZ
+200
+185
+15
+CANA
+263
+243
+20
+CHINA
+255
+235
+20
+GFR
+257
+237
+20
+JAP
+470
+440
+30
+RUSS
+148
+133
+15
+USA
+3137
+3107
+30
+总
+5378
+5168
+210
+4.2 环境配置
+使用三台服务器搭建一个完全分布式Hadoop作为测试集群，服务器具体配置信息如表4所示。
+表4 服务器配置信息
+机器
+CPU型号
+CPU属性
+内存
+位数
+系统版本
+Master
+E5-2620
+V2
+6核12线程 2.1GHz
+（2个，12核24线程）
+128G
+64
+Cent-OS 7.4
+Slave1
+E5-2650
+V0
+8核16线程 2.00GHz
+（2个，16核32线程）
+128G
+64
+Cent-OS 7.4
+Slave2
+E5-2650
+V0
+8核16线程 2.00GHz
+（2个，16核32线程）
+128G
+64
+Cent-OS 7.4
+4.3 测试
+（1）首先使用hadoop fs -put命令将数据上传至HDFS，数据上传过程花了将近40分钟，主要是因为小文件过多，还有一个原因是副本数配置为2，所以除了上传原文件之外，每个文件还会额外创建一个副本。以后可以将小文件合并为Sequence文件再上传至HDFS处理，增加处理速度。
+（2）将程序打包为jar文件，使用hadoop jar命令指定执行文件并传入输入输出目录。
+
+图6 第一个job执行时的监控界面
+根据图中的数据我们可以看到，在第一个job运行时，共有5168个map，即与Slip个数一致（Record中将是否分片设置为false，所以一个文件就是一个分片，而测试文件共有5168个）。
+而reduce个数则是由程序指定的（或者作为命令行参数传入），运行时未指定，所以默认为1。
+
+图7 Map与Reduce速度不匹配
+可以看出Reduce相对Map阶段较慢，存在速度不匹配的问题，可以考虑增加Reduce的数量。
+
+图8 评估结果
+如图8所示，通过评估，最终测得宏平均与微平均的F1值均约为84%。
+五、总结
+在本次课程设计中，使用Hadoop实现了一个朴素贝叶斯分类器，利用MapReduce框架，实现了对大量数据的并行处理。最后通过测试文档的真实类别，计算分类模型的Precision，Recall和F1值
+但是该分类器存在处理速度较慢的问题，主要原因是小文件过多，即使设置默认不分片，分片数量也与文件数量相同，从而使map数量达到5168个，使得MapReduce过程文件读取开销过大。后期可以采用合并小文件为序列化文件后再处理。
+通过此次课程设计作业，我学会了Hadoop的环境搭建和基本的设计架构，掌握了大数据处理的基本方法，对HDFS、MapReduce等内部实现细节有一个基本的认识。
+六、 附录
+整个项目中包含的文件如表5所示。
+表5 工程中包含的文件
+文件名
+作用
+行数
+MyFileInputFormat
+自定义的InputFormat类
+45
+MyFileRecordReader
+自定义的RecordReader
+72
+MapsAndReduces
+存放各个MapReduce程序的Map类与Reduce类
+163
+Model
+根据数据准备阶段的结果，计算概率，存入Hashtable
+143
+DataPreparation
+数据准备阶段的主程序
+184
+Prediction
+样本分类阶段的主程序
+68
+Evaluation
+评估阶段的主程序
+281
+由于工程源码过多，完全打印需要大约25页，所以只选取部分源码附后，并且省略程序的包导入部分。
+6.1 MyFileInputFormat
+//根据官方例程中的WholeFileInputFormat改写
+
+public class MyFileInputFormat extends FileInputFormat<LongWritable, Text> {
+
+    //不切分文件，一个split读入整个文件
+    @Override
+    protected boolean isSplitable(JobContext context, Path filename) {
+        return false;
+    }
+
+    @Override
+    public RecordReader<LongWritable, Text> createRecordReader(InputSplit inputSplit, TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
+        RecordReader reader = new MyFileRecordReader();
+        reader.initialize(inputSplit, taskAttemptContext);
+        return reader;
+    }
+
+    //重写listStatus，返回所有文件列表
+    @Override
+    protected List<FileStatus> listStatus(JobContext job) throws IOException {
+        List<FileStatus> dirs = super.listStatus(job);
+        List<FileStatus> res = new ArrayList<>();
+        //返回每个子目录下的所有文本文件
+        for(FileStatus dir : dirs){
+            FileStatus[] files = dir.getPath().getFileSystem(job.getConfiguration()).listStatus(dir.getPath());
+            res.addAll(Arrays.asList(files));
+        }
+        return res;
+    }
+}
+6.2 MyFileRecordReader
+//自定义RecordReader，读取整个小文件内容
+//Key为文件路径，value为文件内容，都为Text格式
+
+public class MyFileRecordReader extends RecordReader<Text, Text> {
+
+    private FileSplit fileSplit;
+    private Configuration conf;
+    private Text key = new Text();
+    private Text value = new Text();
+    private boolean process = false;
+
+    @Override
+    public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptContext){
+        this.fileSplit = (FileSplit)inputSplit;
+        this.conf = taskAttemptContext.getConfiguration();
+    }
+
+    @Override
+    public boolean nextKeyValue() throws IOException{
+        if(!process){
+            FileSystem fs = fileSplit.getPath().getFileSystem(conf);
+            FSDataInputStream in = null;
+            try {
+                in = new FSDataInputStream(fs.open(fileSplit.getPath()));
+                byte[] contextByte = new byte[(int)fileSplit.getLength()];
+                IOUtils.readFully(in, contextByte, 0, contextByte.length);
+                //等同于 in.read(contextByte, 0, contextByte.length);
+                String context = new String(contextByte, "utf-8");
+                key.set(fileSplit.getPath().toString()); //将文件路径作为Key,文本内容作为value
+                value.set(context);
+            }finally {
+                IOUtils.closeStream(in);
+            }
+            process = true;
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public Text getCurrentKey(){
+        return key;
+    }
+
+    @Override
+    public Text getCurrentValue(){
+        return value;
+    }
+
+    @Override
+    public float getProgress(){
+        return process? 1.0f:1.0f;
+    }
+
+    @Override
+    public void close(){
+
+    }
+}
+6.3 MapsAndReduces
+class MapsAndReduces {
+
+
+//	1. MultiFileWordCount
+//	功能：负责提取所有文本中的单词
+//	输入：args[0],即MyFileInputFormat的输出分片,key为<文件路径>,value为文件内容<word1 word2...>
+//	输出：args[1],key为<类名:单词>,value为单词出现次数,即<<Class:word>,TotalCounts>
+
+	public static class MultiFileWordCountMap extends
+			Mapper<Text, Text, Text, IntWritable> {
+		private final static IntWritable one = new IntWritable(1);
+		private Text word = new Text();
+
+		public void map(Text key, Text value, Context context)
+				throws IOException, InterruptedException {
+			//此处的Key为路径，Value为单个文件的内容
+
+			String line = value.toString();
+
+			StringTokenizer itr = new StringTokenizer(line);
+			while (itr.hasMoreTokens()) {
+				String tmp = itr.nextToken();
+				if(tmp.matches("[a-zA-Z]+")) {//过滤掉以存在非字母的词
+					word.set(new Path(key.toString()).getParent().getName()+":"+tmp); //将key的格式设置为'class:word'
+					context.write(word, one);
+				}
+			}
+		}
+	}
+
+	
+//	2. ClassWordCount
+//	功能：得到每个类的单词总数
+//	输入：args[1],输入格式为<<class:word>,counts>
+//	输出：args[2],输出key为类名,value为单词总数.格式为<class,WordCount>
+
+	public static class ClassWordCountMap extends Mapper<Text, IntWritable, Text, IntWritable>{
+		private Text newKey = new Text();
+		public void map(Text key, IntWritable value, Context context) throws IOException, InterruptedException{
+			int index = key.toString().indexOf(":");
+			newKey.set(key.toString().substring(0, index));
+			context.write(newKey, value);
+		}
+	}
+
+//	3. ExistingWord
+//	功能：得到训练集中出现过的单词
+//	输入：args[1],输入格式为<<class,word>,counts>
+//	输出：args[3],输出key为出现过的单词,value为1.格式为<word,one>
+
+	public static class ExistingWordMap extends Mapper<Text, IntWritable, Text, IntWritable>{
+		private Text newKey = new Text();		
+		public void map(Text key, IntWritable value, Context context) throws IOException, InterruptedException{
+			int index = key.toString().indexOf(":");
+			//将键值设为word
+			newKey.set(key.toString().substring(index+1));
+			context.write(newKey, value);
+		}
+	}
+	public static class ExistingWordReduce extends Reducer<Text, IntWritable, Text, IntWritable>{
+		private final IntWritable one = new IntWritable(1);
+	    public void reduce(Text key, Iterable<IntWritable> values,Context context)throws IOException, InterruptedException {	        
+	        context.write(key, one);
+	    }
+	}
+
+
+//	4. Classify
+//	功能：根据得到的贝叶斯网络，对文档进行分类
+//	输入：args[4],测试文件的路径,经过InputFormat处理后的数据格式为<Path, Context ...>
+//	输出：args[5],输出每一份文档经贝叶斯分类后所对应的类,格式为<doc,class>
+//
+//	附：  HashTable<String,Double> classProbably —— 先验概率
+//        HashTable<String,Double> wordsProbably —— 条件概率
+
+	public static class ClassifyMap extends Mapper<Text, Text, Text, Text>{
+		private Text newKey = new Text();
+		private Text newValue = new Text();
+
+//		public void setup(Context context)throws IOException{
+//			Model.GetPriorProbably();
+//			Model.GetConditionProbably();
+//		}
+
+		public void map(Text key, Text value, Context context) throws IOException, InterruptedException{
+//			String docID = new Path(key.toString()).getParent().getName()  + "\t" +  new Path(key.toString()).getName(); \\将正确结果与分类结果同时打印，方便直观检查
+			String docID = new Path(key.toString()).getName();
+			for(Map.Entry<String, Double> entry:Model.classProbably.entrySet()){//外层循环遍历所有类别
+				String className = entry.getKey();//类名
+				newKey.set(docID);//新的键值的key为<文档名>
+				//先在tempvalue中放入类Ci的先验概率*****
+				double tempvalue = Math.log(entry.getValue());//构建临时键值对的value为各概率相乘,转化为各概率取对数再相加
+				StringTokenizer itr = new StringTokenizer(value.toString());
+				while(itr.hasMoreTokens()){//内层循环遍历一份测试文档中的所有单词	
+					String tempkey = className + ":" + itr.nextToken();//构建临时键值对<class:word>,在wordsProbably表中查找对应的概率
+					if(Model.wordsProbably.containsKey(tempkey)){
+						//如果测试文档的单词在训练集中出现过，则直接加上之前计算的概率
+						tempvalue += Math.log(Model.wordsProbably.get(tempkey));
+					}
+					else{//如果测试文档中出现了新单词则加上之前计算新单词概率
+						tempvalue += Math.log(Model.wordsProbably.get(className));
+					}
+				}
+				newValue.set(className + ":" + tempvalue);//新的键值的value为<类名:概率>,即<class:probably>
+				context.write(newKey, newValue);//一份文档遍历在一个类中遍历完毕,则将结果写入文件,即<docID,<class:probably>>
+				//System.out.println(newKey + "\t" +newValue);
+			}
+		}
+	}
+	public static class ClassifyReduce extends Reducer<Text, Text, Text, Text>{
+		Text newValue = new Text();
+		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException{
+			boolean flag = false;//标记,若第一次循环则先赋值,否则比较若概率更大则更新
+			String tempClass = null;
+			double tempProbably = 0.0;
+			for(Text value:values){
+				int index = value.toString().indexOf(":");
+				if(!flag){//循环第一次
+					tempClass = value.toString().substring(0, index);
+					tempProbably = Double.parseDouble(value.toString().substring(index+1));
+					flag = true;
+				}else{//否则当概率更大时就更新tempClass和tempProbably
+					if(Double.parseDouble(value.toString().substring(index+1)) > tempProbably){
+						tempClass = value.toString().substring(0, index);
+						tempProbably = Double.parseDouble(value.toString().substring(index+1));
+					}
+				}
+			}				
+			
+			newValue.set(tempClass);
+			context.write(key, newValue);
+			System.out.println(key + "\t" + newValue);
+		}
+	}
+}
+6.4 Model
+class Model {
+
+    private static String[] otherArgs = Prediction.getArgs();
+
+    //计算先验概率
+    static Hashtable<String,Double> classProbably = new Hashtable<String, Double>();
+
+    static Hashtable<String,Double> GetPriorProbably() throws IOException {
+        Configuration conf = new Configuration();
+        String filePath = otherArgs[2]+"/part-r-00000";
+        FileSystem fs = FileSystem.get(URI.create(filePath), conf);
+        Path path = new Path(filePath);
+        SequenceFile.Reader reader = null;
+        double totalWords = 0;
+        try{
+//			reader = new SequenceFile.Reader(fs, path, conf);
+            reader = new SequenceFile.Reader(fs, path, conf);
+            Text key = (Text) ReflectionUtils.newInstance(reader.getKeyClass(), conf);
+            IntWritable value = (IntWritable)ReflectionUtils.newInstance(reader.getValueClass(), conf);
+            long position = reader.getPosition();//设置标记点，标记文档起始位置，方便后面再回来遍历
+            while(reader.next(key,value)){
+                totalWords += value.get();//得到训练集总单词数
+            }
+
+            reader.seek(position);//重置到前面定位的标记点
+            while(reader.next(key,value)){
+                classProbably.put(key.toString(), value.get()/totalWords);//P(c)=类c下的单词总数/整个训练样本的单词总数
+                //System.out.println(key+":"+value.get()+"/"+totalWords+"\t"+value.get()/totalWords);
+            }
+        }finally{
+            IOUtils.closeStream(reader);
+        }
+        return classProbably;
+    }
+
+    // 计算条件概率
+    static Hashtable<String, Double> wordsProbably = new Hashtable<String, Double>();
+    static Hashtable<String, Double> GetConditionProbably() throws IOException{
+        Configuration conf = new Configuration();
+        HashMap<String, Double> ClassTotalWords = new HashMap<String, Double>();//每个类及类对应的单词总数
+
+        String ClassTotalWordsPath = otherArgs[2]+"/part-r-00000";
+        String DiffTotalWordsPath = otherArgs[3]+"/part-r-00000";
+        String ClassWordCountsPath = otherArgs[1]+"/part-r-00000";
+        double TotalDiffWords = 0.0;
+
+        FileSystem fs1 = FileSystem.get(URI.create(ClassTotalWordsPath), conf);
+        Path path1 = new Path(ClassTotalWordsPath);
+        SequenceFile.Reader reader1 = null;
+        try{
+            reader1 = new SequenceFile.Reader(fs1, path1, conf);
+//            SequenceFile.Reader reader = new SequenceFile.Reader(conf, SequenceFile.Reader.file(path1));
+            Text key1 = (Text)ReflectionUtils.newInstance(reader1.getKeyClass(), conf);
+            IntWritable value1 = (IntWritable)ReflectionUtils.newInstance(reader1.getValueClass(), conf);
+            while(reader1.next(key1,value1)){
+                ClassTotalWords.put(key1.toString(), value1.get()*1.0);
+                //System.out.println(key1.toString() + "\t" + value1.get());
+            }
+        }finally{
+            IOUtils.closeStream(reader1);
+        }
+
+        FileSystem fs2 = FileSystem.get(URI.create(DiffTotalWordsPath), conf);
+        Path path2 = new Path(DiffTotalWordsPath);
+        SequenceFile.Reader reader2 = null;
+        try{
+            reader2 = new SequenceFile.Reader(fs2, path2, conf);
+            Text key2 = (Text)ReflectionUtils.newInstance(reader2.getKeyClass(), conf);
+            IntWritable value2 = (IntWritable)ReflectionUtils.newInstance(reader2.getValueClass(), conf);
+            while(reader2.next(key2,value2)){
+                TotalDiffWords += value2.get();
+            }
+//            System.out.println(TotalDiffWords);
+        }finally{
+            IOUtils.closeStream(reader2);
+        }
+
+        FileSystem fs3 = FileSystem.get(URI.create(ClassWordCountsPath), conf);
+        Path path3 = new Path(ClassWordCountsPath);
+        SequenceFile.Reader reader3 = null;
+        try{
+            reader3 = new SequenceFile.Reader(fs3, path3, conf);
+            Text key3 = (Text)ReflectionUtils.newInstance(reader3.getKeyClass(), conf);
+            IntWritable value3 = (IntWritable)ReflectionUtils.newInstance(reader3.getValueClass(), conf);
+            Text newKey = new Text();
+            while(reader3.next(key3,value3)){
+                int index = key3.toString().indexOf(":");
+                newKey.set(key3.toString().substring(0, index));//得到单词所在的类
+              
+                wordsProbably.put(key3.toString(), (value3.get()+1)/(ClassTotalWords.get(newKey.toString())+TotalDiffWords));
+                //<<class:word>,wordcounts/(classTotalNums+TotalDiffWords)>
+                //System.out.println(key3.toString() + " \t" + (value3.get()+1) + "/" + (ClassTotalWords.get(newKey.toString())+ "+" +TotalDiffWords));
+            }
+            //对于同一个类别没有出现过的单词的概率一样，1/(ClassTotalWords.get(class) + TotalDiffWords)
+            //遍历类，每个类别中再加一个没有出现单词的概率，其格式为<class,probably>
+            for(Map.Entry<String,Double> entry:ClassTotalWords.entrySet()){
+                wordsProbably.put(entry.getKey(), 1.0/(ClassTotalWords.get(entry.getKey()) + TotalDiffWords));
+            }
+        }finally{
+            IOUtils.closeStream(reader3);
+        }
+        return wordsProbably;
+    }
+
+}
+6.5 DataPreparation
+public class DataPreparation extends Configured implements Tool {
+    private static String[] otherArgs;
+
+
+    private void printUsage() {
+        System.out.println("Usage : <InputDataPath> <Output1> <Output2> <Output3> <TestDataPath> <Output4>" );
+    }
+
+    public static String[] getArgs(){return otherArgs;}
+
+    public int run(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs(); //当命令行输入Hadoop作业的运行参数时，则此命令可取出剩余命令行
+
+        if(otherArgs.length != 6) {
+            printUsage();
+            return 6;
+        }
+
+        FileSystem hdfs = FileSystem.get(conf);
+
+//检查输出目录是否存在，若存在，则删除
+        Path OutPath1 = new Path(otherArgs[1]);
+        Path OutPath2 = new Path(otherArgs[2]);
+        Path OutPath3 = new Path(otherArgs[3]);
+//        Path OutPath4 = new Path(otherArgs[5]);
+        if(hdfs.exists(OutPath1))
+            hdfs.delete(OutPath1, true);
+        if(hdfs.exists(OutPath2))
+            hdfs.delete(OutPath2, true);
+        if(hdfs.exists(OutPath3))
+            hdfs.delete(OutPath3, true);
+
+//	1. MultiFileWordCount
+//	功能：负责提取所有文本中的单词
+//	输入：args[0],经过MyFileInputFormat的处理后,key为<文件路径>,value为文件内容<word1 word2...>
+//	输出：args[1],key为<类名:单词>,value为单词出现次数,即<<Class:word>,TotalCounts>
+
+        Job job1 = Job.getInstance(conf, "MultiFileWordCount");
+        job1.setJarByClass(DataPreparation.class);
+        job1.setInputFormatClass(MyFileInputFormat.class);
+        //将输出设置为Sequence类型，方便下一个Job读取处理
+        job1.setOutputFormatClass(SequenceFileOutputFormat.class);
+        job1.setOutputKeyClass(Text.class);
+        job1.setOutputValueClass(IntWritable.class);
+        job1.setMapperClass(MapsAndReduces.MultiFileWordCountMap.class);
+        job1.setCombinerClass(IntSumReducer.class);
+        job1.setReducerClass(IntSumReducer.class);
+
+        job1.setMapOutputKeyClass(Text.class);//map阶段的输出的key
+        job1.setMapOutputValueClass(IntWritable.class);//map阶段的输出的value
+        job1.setOutputKeyClass(Text.class);//reduce阶段的输出的key
+        job1.setOutputValueClass(IntWritable.class);//reduce阶段的输出的value
+
+        FileInputFormat.addInputPaths(job1, otherArgs[0]);
+        FileOutputFormat.setOutputPath(job1, OutPath1);
+
+        //加入控制容器
+        ControlledJob ctrljob1 = new  ControlledJob(conf);
+        ctrljob1.setJob(job1);
+
+
+
+//	2. ClassWordCount
+//	功能：得到每个类的单词总数
+//	输入：args[1],输入格式为<<class:word>,counts>
+//	输出：args[2],输出key为类名,value为单词总数.格式为<class,WordCount>
+
+        Job job2 = Job.getInstance(conf, "ClassWordCount");
+        job2.setJarByClass(DataPreparation.class);
+        job2.setInputFormatClass(SequenceFileInputFormat.class);
+        job2.setOutputFormatClass(SequenceFileOutputFormat.class);
+        job2.setMapperClass(MapsAndReduces.ClassWordCountMap.class);
+        job2.setMapOutputKeyClass(Text.class);
+        job2.setMapOutputValueClass(IntWritable.class);
+//        job2.setReducerClass(MapsAndReduces.ClassWordCountReduce.class);
+        job2.setReducerClass(IntSumReducer.class);
+        job2.setOutputKeyClass(Text.class);
+        job2.setOutputValueClass(IntWritable.class);
+        //加入控制容器
+        ControlledJob ctrljob2 = new ControlledJob(conf);
+        ctrljob2.setJob(job2);
+        //job2的输入输出文件路径
+        FileInputFormat.addInputPath(job2, new Path(otherArgs[1] + "/part-r-00000"));
+        FileOutputFormat.setOutputPath(job2, OutPath2);
+
+//	3. ExistingWord
+//	功能：得到训练集中出现过的单词
+//	输入：args[1],输入格式为<<class,word>,counts>
+//	输出：args[3],输出key为出现过的单词,value为1.格式为<word,one>
+
+        Job job3 = Job.getInstance(conf, "ExistingWord");
+        job3.setJarByClass(DataPreparation.class);
+        job3.setInputFormatClass(SequenceFileInputFormat.class);
+        job3.setOutputFormatClass(SequenceFileOutputFormat.class);
+        job3.setMapperClass(MapsAndReduces.ExistingWordMap.class);
+        job3.setMapOutputKeyClass(Text.class);
+        job3.setMapOutputValueClass(IntWritable.class);
+//		job3.setCombinerClass(MapsAndReduces.ExistingWordReduce.class);
+        job3.setReducerClass(MapsAndReduces.ExistingWordReduce.class);
+        job3.setOutputKeyClass(Text.class);
+        job3.setOutputValueClass(IntWritable.class);
+        //加入控制容器
+        ControlledJob ctrljob3 = new ControlledJob(conf);
+        ctrljob3.setJob(job3);
+        //job3的输入输出文件路径
+        FileInputFormat.addInputPath(job3, new Path(otherArgs[1] + "/part-r-00000"));
+        FileOutputFormat.setOutputPath(job3, OutPath3);
+
+
+        //作业之间依赖关系
+        ctrljob2.addDependingJob(ctrljob1);
+        ctrljob3.addDependingJob(ctrljob1);
+
+        //主的控制容器，控制上面的子作业
+        JobControl jobCtrl = new JobControl("NaiveBayes");
+        //添加到总的JobControl里，进行控制
+        jobCtrl.addJob(ctrljob1);
+        jobCtrl.addJob(ctrljob2);
+        jobCtrl.addJob(ctrljob3);
+
+        //启动线程
+        Thread  theController = new Thread(jobCtrl);
+        theController.start();
+        while(true){
+            if(jobCtrl.allFinished()){
+                //如果作业成功完成，就打印成功作业的信息
+                System.out.println(jobCtrl.getSuccessfulJobList());
+                jobCtrl.stop();
+                return 0;
+            }
+        }
+    }
+    public static void main(String[] args) throws Exception {
+        int ret = ToolRunner.run(new DataPreparation(), args);
+        System.exit(ret);
+    }
+}
+6.6 Prediction
+public class Prediction extends Configured implements Tool {
+    private static String[] otherArgs;
+
+    public static String[] getArgs(){return otherArgs;}
+
+    public int run(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
+        FileSystem hdfs = FileSystem.get(conf);
+
+        //检查输出目录是否存在，若存在，则删除
+        Path OutPath = new Path(otherArgs[5]);
+        if(hdfs.exists(OutPath))
+            hdfs.delete(OutPath, true);
+
+        //初始化概率值，并存入Hashtable
+        Model.GetPriorProbably();
+        Model.GetConditionProbably();
+
+//	Classify
+//	功能：根据得到的贝叶斯网络，对文档进行分类
+//	输入：args[4],测试文件的路径,经过InputFormat处理后的数据格式为<Path, Context ...>
+//	输出：args[5],输出每一份文档经贝叶斯分类后所对应的类,格式为<doc,class>
+
+        Job job = Job.getInstance(conf, "Classify");
+        job.setJarByClass(DataPreparation.class);
+        job.setInputFormatClass(MyFileInputFormat.class);
+        job.setOutputFormatClass(SequenceFileOutputFormat.class);
+        job.setMapperClass(MapsAndReduces.ClassifyMap.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(Text.class);
+        job.setReducerClass(MapsAndReduces.ClassifyReduce.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+        //加入控制容器
+        ControlledJob ctrljob4 = new ControlledJob(conf);
+        ctrljob4.setJob(job);
+        //job的输入输出文件路径
+        FileInputFormat.addInputPath(job, new Path(otherArgs[4]));
+        FileOutputFormat.setOutputPath(job, OutPath);
+
+        return job.waitForCompletion(true) ? 0 : 1;
+    }
+
+    public static void main(String[] args) throws Exception {
+        int ret = ToolRunner.run(new Prediction(), args);
+        System.exit(ret);
+    }
+}
+

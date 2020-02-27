@@ -1,4 +1,4 @@
-#include "10_10_stack.h"
+//#include "10_10_stack.h"
 Stack::Stack()
 {
 	top = 0;
